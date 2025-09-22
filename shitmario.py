@@ -8,7 +8,8 @@ W, H = 800, 300
 FLOOR_Y = 250
 PLAYER_SIZE = (30, 40)
 OBSTACLE_SIZE = (30, 40)
-SPEED = -25   # obstacle speed (fast!)
+SPEED = -25   # obstacle speed
+FLY_DURATION = 2  # seconds
 
 @dataclass
 class Rect:
@@ -43,20 +44,43 @@ if "score" not in st.session_state:
     st.session_state.score = 0
 if "game_over" not in st.session_state:
     st.session_state.game_over = False
+if "fly_until" not in st.session_state:
+    st.session_state.fly_until = 0
+if "last_jump_time" not in st.session_state:
+    st.session_state.last_jump_time = 0
 
 # --- Controls ---
 if st.button("⬆️ Jump") and not st.session_state.game_over:
-    if st.session_state.player_y == FLOOR_Y - PLAYER_SIZE[1]:  # only jump if on ground
-        st.session_state.player_vy = -12   # shorter jump
+    now = time.time()
+    # Detect double press (within 0.4s)
+    if now - st.session_state.last_jump_time < 0.4:
+        if now < st.session_state.fly_until:
+            # If already flying → cancel fly immediately
+            st.session_state.fly_until = 0
+        else:
+            # Start flying
+            st.session_state.fly_until = now + FLY_DURATION
+    else:
+        # Normal jump if on ground
+        if st.session_state.player_y == FLOOR_Y - PLAYER_SIZE[1]:
+            st.session_state.player_vy = -12
+    st.session_state.last_jump_time = now
 
-# --- Game Loop (one frame per rerun) ---
+# --- Game Loop ---
 if not st.session_state.game_over:
-    # Gravity
-    st.session_state.player_y += st.session_state.player_vy
-    st.session_state.player_vy += 2   # stronger gravity (falls faster)
-    if st.session_state.player_y >= FLOOR_Y - PLAYER_SIZE[1]:
-        st.session_state.player_y = FLOOR_Y - PLAYER_SIZE[1]
+    now = time.time()
+
+    if now < st.session_state.fly_until:
+        # Flying mode → float at a fixed height
+        st.session_state.player_y = 100
         st.session_state.player_vy = 0
+    else:
+        # Normal physics
+        st.session_state.player_y += st.session_state.player_vy
+        st.session_state.player_vy += 2   # gravity
+        if st.session_state.player_y >= FLOOR_Y - PLAYER_SIZE[1]:
+            st.session_state.player_y = FLOOR_Y - PLAYER_SIZE[1]
+            st.session_state.player_vy = 0
 
     # Obstacle movement
     st.session_state.obstacle_x += SPEED
@@ -92,7 +116,12 @@ st.markdown(f"**Score:** {st.session_state.score}")
 
 if st.session_state.game_over:
     st.error("💀 Game Over! Press 🔄 Restart.")
+elif st.session_state.fly_until > time.time():
+    st.info("🕊️ Flying mode active! (Press ⬆️ twice again to cancel)")
 else:
-    # auto-refresh every 30ms (≈33 FPS)
+    st.caption("Press ⬆️ once to jump, twice quickly to fly for 2s.")
+
+# --- Refresh ---
+if not st.session_state.game_over:
     time.sleep(0.03)
     st.rerun()
