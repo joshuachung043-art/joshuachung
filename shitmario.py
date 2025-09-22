@@ -14,7 +14,6 @@ JUMP_VY = -12
 GRAVITY = 3
 FLY_DURATION = 2.0
 DOUBLE_PRESS_WINDOW = 0.4
-FRAME_RATE = 30  # frames per second
 
 # ---------------- DATACLASS ----------------
 @dataclass
@@ -109,7 +108,9 @@ canvas = st.empty()
 img = Image.new("RGBA", (W,H), (200,230,255))
 d = ImageDraw.Draw(img)
 d.rectangle((0,FLOOR_Y,W,H), fill=(87,59,37))
+player_rect = Rect(80, st.session_state.player_y, *PLAYER_SIZE)
 d.rectangle(player_rect.as_tuple(), fill=(235,64,52))
+obstacle_rect = Rect(st.session_state.obstacle_x, FLOOR_Y - OBSTACLE_SIZE[1], *OBSTACLE_SIZE)
 d.rectangle(obstacle_rect.as_tuple(), fill=(40,40,40))
 d.text((12,12), f"Score: {st.session_state.score}", fill=(255,255,255))
 canvas.image(img, use_container_width=True)
@@ -122,6 +123,3 @@ elif st.session_state.game_over:
     st.error("💀 Game Over! Press 🔄 Restart.")
 else:
     st.caption("Press ⬆️ once = jump, double = fly 2s, double again cancels")
-
-# ---------------- NEXT FRAME ----------------
-st.experimental_rerun()
