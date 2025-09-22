@@ -8,7 +8,7 @@ W, H = 800, 300
 FLOOR_Y = 250
 PLAYER_SIZE = (30, 40)
 OBSTACLE_SIZE = (30, 40)
-SPEED = -15   # obstacle speed (was -8, now faster!)
+SPEED = -25   # obstacle speed (fast!)
 
 @dataclass
 class Rect:
@@ -26,6 +26,12 @@ class Rect:
             or self.y >= other.y + other.h
         )
 
+# --- Restart button ---
+if st.button("🔄 Restart"):
+    for key in list(st.session_state.keys()):
+        del st.session_state[key]
+    st.rerun()
+
 # --- Initialize ---
 if "player_y" not in st.session_state:
     st.session_state.player_y = FLOOR_Y - PLAYER_SIZE[1]
@@ -41,13 +47,13 @@ if "game_over" not in st.session_state:
 # --- Controls ---
 if st.button("⬆️ Jump") and not st.session_state.game_over:
     if st.session_state.player_y == FLOOR_Y - PLAYER_SIZE[1]:  # only jump if on ground
-        st.session_state.player_vy = -20
+        st.session_state.player_vy = -12   # shorter jump
 
 # --- Game Loop (one frame per rerun) ---
 if not st.session_state.game_over:
     # Gravity
     st.session_state.player_y += st.session_state.player_vy
-    st.session_state.player_vy += 1
+    st.session_state.player_vy += 2   # stronger gravity (falls faster)
     if st.session_state.player_y >= FLOOR_Y - PLAYER_SIZE[1]:
         st.session_state.player_y = FLOOR_Y - PLAYER_SIZE[1]
         st.session_state.player_vy = 0
@@ -85,8 +91,8 @@ st.image(img, use_column_width=True)
 st.markdown(f"**Score:** {st.session_state.score}")
 
 if st.session_state.game_over:
-    st.error("💀 Game Over! Refresh to restart.")
+    st.error("💀 Game Over! Press 🔄 Restart.")
 else:
-    # auto-refresh every 50ms (was 100ms → now smoother + faster)
-    time.sleep(0.05)
+    # auto-refresh every 30ms (≈33 FPS)
+    time.sleep(0.03)
     st.rerun()
