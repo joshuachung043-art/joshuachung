@@ -85,7 +85,7 @@ d.rectangle(player_rect.as_tuple(), fill=(235, 64, 52))
 obstacle_rect = Rect(st.session_state.obstacle_x, FLOOR_Y - OBSTACLE_SIZE[1], *OBSTACLE_SIZE)
 d.rectangle(obstacle_rect.as_tuple(), fill=(50, 50, 50))
 
-st.image(img, use_column_width=True)
+st.image(img, use_container_width=True)
 
 # HUD
 st.markdown(f"**Score:** {st.session_state.score}")
