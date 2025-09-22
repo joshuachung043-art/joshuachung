@@ -1,4 +1,3 @@
-# app.py
 import streamlit as st
 from dataclasses import dataclass
 from PIL import Image, ImageDraw
@@ -10,12 +9,12 @@ W, H = 900, 360
 FLOOR_Y = 280
 PLAYER_SIZE = (36, 44)
 OBSTACLE_SIZE = (36, 44)
-SPEED = -30
+SPEED = 200  # pixels per second
 JUMP_VY = -12
 GRAVITY = 3
 FLY_DURATION = 2.0
 DOUBLE_PRESS_WINDOW = 0.4
-FRAME_SLEEP = 0.03
+FRAME_RATE = 30  # frames per second
 
 # ---------------- DATACLASS ----------------
 @dataclass
@@ -42,7 +41,8 @@ defaults = {
     "score": 0,
     "game_over": False,
     "fly_until": 0.0,
-    "last_jump_time": 0.0
+    "last_jump_time": 0.0,
+    "last_time": time.time()
 }
 for key, val in defaults.items():
     if key not in st.session_state:
@@ -65,22 +65,24 @@ if jump_pressed and not st.session_state.game_over:
     delta = now - st.session_state.last_jump_time
     if delta <= DOUBLE_PRESS_WINDOW:
         if now < st.session_state.fly_until:
-            st.session_state.fly_until = 0.0
+            st.session_state.fly_until = 0.0  # cancel flying
         else:
-            st.session_state.fly_until = now + FLY_DURATION
+            st.session_state.fly_until = now + FLY_DURATION  # start flying
     else:
         on_ground = st.session_state.player_y >= FLOOR_Y - PLAYER_SIZE[1] - 1
         if on_ground and now >= st.session_state.fly_until:
             st.session_state.player_vy = JUMP_VY
     st.session_state.last_jump_time = now
 
-# ---------------- GAME UPDATE ----------------
-canvas = st.empty()
+# ---------------- TIME DELTA ----------------
+current_time = time.time()
+dt = current_time - st.session_state.last_time
+st.session_state.last_time = current_time
 
-# Update one frame
-now = time.time()
+# ---------------- GAME LOGIC ----------------
 if not st.session_state.game_over:
-    if now < st.session_state.fly_until:
+    # Flying or normal
+    if current_time < st.session_state.fly_until:
         st.session_state.player_y = 120
         st.session_state.player_vy = 0
     else:
@@ -91,7 +93,7 @@ if not st.session_state.game_over:
             st.session_state.player_vy = 0
 
     # Move obstacle
-    st.session_state.obstacle_x += SPEED
+    st.session_state.obstacle_x -= SPEED * dt
     if st.session_state.obstacle_x < -OBSTACLE_SIZE[0]:
         st.session_state.obstacle_x = W + random.randint(0,200)
         st.session_state.score += 1
@@ -103,25 +105,23 @@ if not st.session_state.game_over:
         st.session_state.game_over = True
 
 # ---------------- DRAW ----------------
+canvas = st.empty()
 img = Image.new("RGBA", (W,H), (200,230,255))
 d = ImageDraw.Draw(img)
 d.rectangle((0,FLOOR_Y,W,H), fill=(87,59,37))
-player_rect = Rect(80, st.session_state.player_y, *PLAYER_SIZE)
 d.rectangle(player_rect.as_tuple(), fill=(235,64,52))
-obstacle_rect = Rect(st.session_state.obstacle_x, FLOOR_Y - OBSTACLE_SIZE[1], *OBSTACLE_SIZE)
 d.rectangle(obstacle_rect.as_tuple(), fill=(40,40,40))
 d.text((12,12), f"Score: {st.session_state.score}", fill=(255,255,255))
 canvas.image(img, use_container_width=True)
 
-# HUD
-if st.session_state.fly_until > now:
-    remaining = max(0, st.session_state.fly_until - now)
+# ---------------- HUD ----------------
+if st.session_state.fly_until > current_time:
+    remaining = max(0, st.session_state.fly_until - current_time)
     st.info(f"🕊️ Flying — {remaining:.1f}s left (double press again to cancel)")
 elif st.session_state.game_over:
     st.error("💀 Game Over! Press 🔄 Restart.")
 else:
-    st.caption("Press ⬆️ once = jump, double = fly 2s, double again cancels.")
+    st.caption("Press ⬆️ once = jump, double = fly 2s, double again cancels")
 
-# ---------------- LOOP EMULATION ----------------
-time.sleep(FRAME_SLEEP)
-st.experimental_rerun()  # Safe now: called at the end of the script to simulate animation
+# ---------------- NEXT FRAME ----------------
+st.experimental_rerun()
