@@ -35,29 +35,30 @@ class Rect:
         )
 
 # ---------------- SESSION STATE ----------------
-for key, value in [
-    ("player_y", FLOOR_Y - PLAYER_SIZE[1]),
-    ("player_vy", 0),
-    ("obstacle_x", W),
-    ("score", 0),
-    ("game_over", False),
-    ("fly_until", 0.0),
-    ("last_jump_time", 0.0)
-]:
+defaults = {
+    "player_y": FLOOR_Y - PLAYER_SIZE[1],
+    "player_vy": 0,
+    "obstacle_x": W,
+    "score": 0,
+    "game_over": False,
+    "fly_until": 0.0,
+    "last_jump_time": 0.0
+}
+for key, val in defaults.items():
     if key not in st.session_state:
-        st.session_state[key] = value
+        st.session_state[key] = val
 
 # ---------------- UI ----------------
-col1, col2 = st.columns([1, 3])
+col1, col2 = st.columns([1,3])
 with col1:
     restart_pressed = st.button("🔄 Restart")
 with col2:
-    st.markdown("**Controls:** Single ⬆️ = jump. Double ⬆️ quickly = fly for 2s. Double ⬆️ again while flying = cancel fly.")
+    st.markdown("**Controls:** Single ⬆️ = jump. Double ⬆️ quickly = fly 2s. Double ⬆️ again cancels fly.")
 
 if restart_pressed:
     for key in list(st.session_state.keys()):
         del st.session_state[key]
-    st.experimental_rerun()
+    st.experimental_rerun()  # This is safe here, only called immediately after Restart
 
 jump_pressed = st.button("⬆️ Jump")
 now = time.time()
@@ -75,15 +76,13 @@ if jump_pressed and not st.session_state.game_over:
     st.session_state.last_jump_time = now
 
 # ---------------- GAME LOOP ----------------
-canvas = st.empty()  # placeholder for drawing
-
-# Only animate if game is running
+canvas = st.empty()
 while True:
     if st.session_state.game_over:
         break
 
     now = time.time()
-    # Flying or normal
+    # Flying or normal physics
     if now < st.session_state.fly_until:
         st.session_state.player_y = 120
         st.session_state.player_vy = 0
@@ -97,7 +96,7 @@ while True:
     # Move obstacle
     st.session_state.obstacle_x += SPEED
     if st.session_state.obstacle_x < -OBSTACLE_SIZE[0]:
-        st.session_state.obstacle_x = W + random.randint(0, 200)
+        st.session_state.obstacle_x = W + random.randint(0,200)
         st.session_state.score += 1
 
     # Collision
@@ -107,12 +106,12 @@ while True:
         st.session_state.game_over = True
 
     # Draw
-    img = Image.new("RGBA", (W, H), (200, 230, 255))
+    img = Image.new("RGBA", (W,H), (200,230,255))
     d = ImageDraw.Draw(img)
-    d.rectangle((0, FLOOR_Y, W, H), fill=(87, 59, 37))  # ground
-    d.rectangle(player_rect.as_tuple(), fill=(235, 64, 52))
-    d.rectangle(obstacle_rect.as_tuple(), fill=(40, 40, 40))
-    d.text((12, 12), f"Score: {st.session_state.score}", fill=(255, 255, 255))
+    d.rectangle((0,FLOOR_Y,W,H), fill=(87,59,37))
+    d.rectangle(player_rect.as_tuple(), fill=(235,64,52))
+    d.rectangle(obstacle_rect.as_tuple(), fill=(40,40,40))
+    d.text((12,12), f"Score: {st.session_state.score}", fill=(255,255,255))
     canvas.image(img, use_container_width=True)
 
     # HUD
@@ -122,6 +121,6 @@ while True:
     elif st.session_state.game_over:
         st.error("💀 Game Over! Press 🔄 Restart.")
     else:
-        st.caption("Press ⬆️ once = jump, double = fly for 2s")
+        st.caption("Press ⬆️ once = jump, double = fly 2s, double again cancels.")
 
     time.sleep(FRAME_SLEEP)
