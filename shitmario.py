@@ -1,125 +1,252 @@
+"""
+Streamlit Super-Mario-like mini game
+Run with: streamlit run streamlit_mario.py
+
+This single-file Streamlit app embeds an HTML5 Canvas platformer via st.components.v1.html.
+It's intentionally simple and self-contained (no external assets).
+Feel free to ask for features: tileset, sprite images, levels, sound, mobile support.
+"""
 import streamlit as st
-from dataclasses import dataclass
-from PIL import Image, ImageDraw
-import time
-import random
+import streamlit.components.v1 as components
 
-# ---------------- CONFIG ----------------
-W, H = 900, 360
-FLOOR_Y = 280
-PLAYER_SIZE = (36, 44)
-OBSTACLE_SIZE = (36, 44)
-SPEED = 200  # pixels per second
-JUMP_VY = -12
-GRAVITY = 3
-FLY_DURATION = 2.0
-DOUBLE_PRESS_WINDOW = 0.4
+st.set_page_config(page_title="Mini Mario (Streamlit)", layout='wide')
+st.title("迷你瑪利歐 — 可在 Streamlit 遊玩的平台遊戲 (HTML5 Canvas)")
+st.markdown("按 ← → 移動，空白鍵跳躍。收集金幣到達旗子過關！")
 
-# ---------------- DATACLASS ----------------
-@dataclass
-class Rect:
-    x: float
-    y: float
-    w: float
-    h: float
-    def as_tuple(self):
-        return (self.x, self.y, self.x + self.w, self.y + self.h)
-    def intersects(self, other: "Rect") -> bool:
-        return not (
-            self.x + self.w <= other.x
-            or self.x >= other.x + other.w
-            or self.y + self.h <= other.y
-            or self.y >= other.y + other.h
-        )
+# Embedded HTML + JS game
+html = r'''
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <style>
+    html,body { margin:0; padding:0; background:#87CEEB; }
+    canvas { display:block; margin:0 auto; background: linear-gradient(#87CEEB, #A0D8F1); }
+    #wrapper { text-align:center; }
+  </style>
+</head>
+<body>
+  <div id="wrapper">
+    <canvas id="game" width="960" height="540"></canvas>
+  </div>
+<script>
+// Simple platformer: player, platforms, coins, enemy, goal
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const W = canvas.width, H = canvas.height;
 
-# ---------------- SESSION STATE ----------------
-defaults = {
-    "player_y": FLOOR_Y - PLAYER_SIZE[1],
-    "player_vy": 0,
-    "obstacle_x": W,
-    "score": 0,
-    "game_over": False,
-    "fly_until": 0.0,
-    "last_jump_time": 0.0,
-    "last_time": time.time()
+let keys = {};
+window.addEventListener('keydown', e=>{ keys[e.code]=true; e.preventDefault(); });
+window.addEventListener('keyup', e=>{ keys[e.code]=false; e.preventDefault(); });
+
+// Camera / world
+let cameraX = 0;
+
+// Player
+let player = {
+  x:50, y:380, w:28, h:40,
+  vx:0, vy:0, speed:2.4, jumpPower:9, onGround:false,
+  color:'#e74c3c'
+};
+
+const gravity = 0.5;
+
+// Level layout (platforms as x,y,w,h)
+let platforms = [
+  {x:0,y:440,w:2000,h:100},
+  {x:250,y:360,w:160,h:20},
+  {x:460,y:300,w:140,h:20},
+  {x:700,y:240,w:120,h:20},
+  {x:920,y:330,w:160,h:20},
+  {x:1200,y:380,w:100,h:20},
+  {x:1400,y:320,w:160,h:20},
+  {x:1700,y:360,w:220,h:20}
+];
+
+// Coins
+let coins = [
+  {x:280,y:320,collected:false},
+  {x:500,y:260,collected:false},
+  {x:740,y:200,collected:false},
+  {x:980,y:290,collected:false},
+  {x:1420,y:280,collected:false}
+];
+let score = 0;
+
+// Enemy simple
+let enemy = {x:1100,y:400,w:32,h:28,dir:1,speed:1.2};
+
+// Goal (flag)
+let goal = {x:1850,y:340,w:20,h:100};
+let gameState = 'playing'; // 'playing', 'won', 'dead'
+
+function rectsOverlap(a,b){
+  return !(a.x+a.w < b.x || a.x > b.x+b.w || a.y+a.h < b.y || a.y > b.y+b.h);
 }
-for key, val in defaults.items():
-    if key not in st.session_state:
-        st.session_state[key] = val
 
-# ---------------- UI ----------------
-col1, col2 = st.columns([1,3])
+function update(){
+  if(gameState!=='playing') return;
+  // input
+  if(keys['ArrowLeft']||keys['KeyA']) player.vx = -player.speed;
+  else if(keys['ArrowRight']||keys['KeyD']) player.vx = player.speed;
+  else player.vx = 0;
+  if((keys['Space']||keys['ArrowUp']||keys['KeyW']) && player.onGround){ player.vy = -player.jumpPower; player.onGround=false; }
+
+  // physics
+  player.vy += gravity;
+  player.x += player.vx;
+  player.y += player.vy;
+
+  // collisions with platforms
+  player.onGround = false;
+  for(let p of platforms){
+    // AABB collision check after movement
+    let pp = {x:p.x, y:p.y, w:p.w, h:p.h};
+    let pl = {x:player.x, y:player.y, w:player.w, h:player.h};
+    if(rectsOverlap(pl,pp)){
+      // determine penetration depths
+      let px = (player.x + player.w/2) - (p.x + p.w/2);
+      let py = (player.y + player.h/2) - (p.y + p.h/2);
+      let overlapX = (player.w/2 + p.w/2) - Math.abs(px);
+      let overlapY = (player.h/2 + p.h/2) - Math.abs(py);
+      if(overlapX < overlapY){
+        // resolve X
+        if(px>0) player.x += overlapX; else player.x -= overlapX;
+        player.vx = 0;
+      } else {
+        // resolve Y
+        if(py>0){ player.y += overlapY; player.vy = 0; }
+        else { player.y -= overlapY; player.vy = 0; player.onGround = true; }
+      }
+    }
+  }
+
+  // enemy movement
+  enemy.x += enemy.dir * enemy.speed;
+  // simple patrol range
+  if(enemy.x < 1060) enemy.dir = 1;
+  if(enemy.x > 1260) enemy.dir = -1;
+
+  // camera follow
+  cameraX = player.x - 200;
+  if(cameraX < 0) cameraX = 0;
+
+  // coin collection
+  for(let c of coins){
+    if(!c.collected){
+      let coinBox = {x:c.x-8, y:c.y-8, w:16, h:16};
+      let pl = {x:player.x, y:player.y, w:player.w, h:player.h};
+      if(rectsOverlap(coinBox,pl)){
+        c.collected = true; score += 1;
+      }
+    }
+  }
+
+  // enemy collision -> die
+  if(rectsOverlap({x:enemy.x,y:enemy.y,w:enemy.w,h:enemy.h}, {x:player.x,y:player.y,w:player.w,h:player.h})){
+    // if player falling onto enemy, bounce & kill enemy
+    if(player.vy > 1){ enemy.dead = true; player.vy = -6; }
+    else { gameState = 'dead'; }
+  }
+
+  // win if reach goal
+  if(player.x > goal.x){ gameState = 'won'; }
+}
+
+function draw(){
+  // clear
+  ctx.clearRect(0,0,W,H);
+
+  // sky and ground gradient already via CSS background, draw small clouds
+  // draw parallax background hills
+  ctx.fillStyle='#8BC34A';
+  for(let i=0;i<6;i++){
+    let hx = (i*400 - cameraX*0.2)%2000 - 100;
+    ctx.beginPath(); ctx.ellipse(hx,430,150,60,0,0,2*Math.PI); ctx.fill();
+  }
+
+  // draw platforms
+  for(let p of platforms){
+    ctx.fillStyle='#654321';
+    ctx.fillRect(p.x - cameraX, p.y, p.w, p.h);
+    // top grass
+    ctx.fillStyle='#2ecc71';
+    ctx.fillRect(p.x - cameraX, p.y-6, Math.min(p.w,50), 6);
+  }
+
+  // draw coins
+  for(let c of coins){
+    if(!c.collected){
+      ctx.fillStyle='#f1c40f';
+      ctx.beginPath(); ctx.arc(c.x - cameraX, c.y, 8, 0, Math.PI*2); ctx.fill();
+      ctx.strokeStyle='rgba(0,0,0,0.2)'; ctx.stroke();
+    }
+  }
+
+  // draw enemy
+  if(!enemy.dead){
+    ctx.fillStyle='#2c3e50';
+    ctx.fillRect(enemy.x - cameraX, enemy.y, enemy.w, enemy.h);
+  } else {
+    // enemy squashed
+    ctx.fillStyle='rgba(44,62,80,0.6)';
+    ctx.fillRect(enemy.x - cameraX, enemy.y+10, enemy.w, 6);
+  }
+
+  // draw goal flag
+  ctx.fillStyle='#333'; ctx.fillRect(goal.x - cameraX, goal.y, 6, goal.h);
+  ctx.fillStyle='#e74c3c'; ctx.beginPath(); ctx.moveTo(goal.x+6 - cameraX, goal.y+10); ctx.lineTo(goal.x+36 - cameraX, goal.y+24); ctx.lineTo(goal.x+6 - cameraX, goal.y+36); ctx.closePath(); ctx.fill();
+
+  // draw player
+  ctx.fillStyle = player.color;
+  ctx.fillRect(player.x - cameraX, player.y, player.w, player.h);
+  // simple eyes
+  ctx.fillStyle = '#fff'; ctx.fillRect(player.x - cameraX +6, player.y+8,6,6); ctx.fillStyle='#000'; ctx.fillRect(player.x - cameraX +8, player.y+10,2,2);
+
+  // HUD
+  ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(10,10,140,36);
+  ctx.fillStyle = '#fff'; ctx.font='16px Arial'; ctx.fillText('金幣: '+score, 18,32);
+
+  // messages
+  if(gameState==='won'){
+    ctx.fillStyle='rgba(0,0,0,0.6)'; ctx.fillRect(W/2-160,H/2-40,320,80);
+    ctx.fillStyle='#fff'; ctx.font='28px Arial'; ctx.fillText('你贏了！恭喜過關 🎉', W/2-130, H/2);
+  }
+  if(gameState==='dead'){
+    ctx.fillStyle='rgba(0,0,0,0.6)'; ctx.fillRect(W/2-160,H/2-40,320,80);
+    ctx.fillStyle='#fff'; ctx.font='28px Arial'; ctx.fillText('你死了，按 R 重新開始', W/2-160, H/2);
+  }
+}
+
+function reset(){
+  player.x=50; player.y=380; player.vx=0; player.vy=0; score=0; cameraX=0; gameState='playing';
+  for(let c of coins) c.collected=false; enemy.dead=false; enemy.x=1100; enemy.dir=1;
+}
+
+window.addEventListener('keydown', e=>{
+  if(e.code==='KeyR'){ reset(); }
+});
+
+// game loop
+function loop(){ update(); draw(); requestAnimationFrame(loop); }
+loop();
+</script>
+</body>
+</html>
+'''
+
+# Embed in Streamlit
+components.html(html, height=600, scrolling=False)
+
+st.markdown('---')
+col1, col2 = st.columns(2)
 with col1:
-    restart_pressed = st.button("🔄 Restart")
+    st.header('控制')
+    st.write('← → 移動，空白鍵或上鍵跳，R 重置遊戲。')
 with col2:
-    st.markdown("**Controls:** Single ⬆️ = jump. Double ⬆️ quickly = fly 2s. Double ⬆️ again cancels fly.")
+    st.header('說明')
+    st.write('這是個極簡版的平台遊戲示範。若要加入：')
+    st.write('- 真正的像素角色圖、音效、更多關卡')
+    st.write('- 敵人 AI、碰撞優化、手機支援')
 
-if restart_pressed:
-    for key, val in defaults.items():
-        st.session_state[key] = val
-
-jump_pressed = st.button("⬆️ Jump")
-now = time.time()
-if jump_pressed and not st.session_state.game_over:
-    delta = now - st.session_state.last_jump_time
-    if delta <= DOUBLE_PRESS_WINDOW:
-        if now < st.session_state.fly_until:
-            st.session_state.fly_until = 0.0  # cancel flying
-        else:
-            st.session_state.fly_until = now + FLY_DURATION  # start flying
-    else:
-        on_ground = st.session_state.player_y >= FLOOR_Y - PLAYER_SIZE[1] - 1
-        if on_ground and now >= st.session_state.fly_until:
-            st.session_state.player_vy = JUMP_VY
-    st.session_state.last_jump_time = now
-
-# ---------------- TIME DELTA ----------------
-current_time = time.time()
-dt = current_time - st.session_state.last_time
-st.session_state.last_time = current_time
-
-# ---------------- GAME LOGIC ----------------
-if not st.session_state.game_over:
-    # Flying or normal
-    if current_time < st.session_state.fly_until:
-        st.session_state.player_y = 120
-        st.session_state.player_vy = 0
-    else:
-        st.session_state.player_y += st.session_state.player_vy
-        st.session_state.player_vy += GRAVITY
-        if st.session_state.player_y >= FLOOR_Y - PLAYER_SIZE[1]:
-            st.session_state.player_y = FLOOR_Y - PLAYER_SIZE[1]
-            st.session_state.player_vy = 0
-
-    # Move obstacle
-    st.session_state.obstacle_x -= SPEED * dt
-    if st.session_state.obstacle_x < -OBSTACLE_SIZE[0]:
-        st.session_state.obstacle_x = W + random.randint(0,200)
-        st.session_state.score += 1
-
-    # Collision
-    player_rect = Rect(80, st.session_state.player_y, *PLAYER_SIZE)
-    obstacle_rect = Rect(st.session_state.obstacle_x, FLOOR_Y - OBSTACLE_SIZE[1], *OBSTACLE_SIZE)
-    if player_rect.intersects(obstacle_rect):
-        st.session_state.game_over = True
-
-# ---------------- DRAW ----------------
-canvas = st.empty()
-img = Image.new("RGBA", (W,H), (200,230,255))
-d = ImageDraw.Draw(img)
-d.rectangle((0,FLOOR_Y,W,H), fill=(87,59,37))
-player_rect = Rect(80, st.session_state.player_y, *PLAYER_SIZE)
-d.rectangle(player_rect.as_tuple(), fill=(235,64,52))
-obstacle_rect = Rect(st.session_state.obstacle_x, FLOOR_Y - OBSTACLE_SIZE[1], *OBSTACLE_SIZE)
-d.rectangle(obstacle_rect.as_tuple(), fill=(40,40,40))
-d.text((12,12), f"Score: {st.session_state.score}", fill=(255,255,255))
-canvas.image(img, use_container_width=True)
-
-# ---------------- HUD ----------------
-if st.session_state.fly_until > current_time:
-    remaining = max(0, st.session_state.fly_until - current_time)
-    st.info(f"🕊️ Flying — {remaining:.1f}s left (double press again to cancel)")
-elif st.session_state.game_over:
-    st.error("💀 Game Over! Press 🔄 Restart.")
-else:
-    st.caption("Press ⬆️ once = jump, double = fly 2s, double again cancels")
+st.info('如果你想我可以：產生更多關卡 (JSON)、加入真人馬里奧風格像素圖、或改寫成純 Python/Pygame 版本（但 Pygame 不容易嵌入 Streamlit）。告訴我你要的功能，我會直接幫你改好程式碼。')
