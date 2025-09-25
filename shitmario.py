@@ -1,10 +1,6 @@
 """
-Streamlit Super-Mario-like mini game
+Streamlit Super-Mario-like mini game (fixed key controls)
 Run with: streamlit run streamlit_mario.py
-
-This single-file Streamlit app embeds an HTML5 Canvas platformer via st.components.v1.html.
-It's intentionally simple and self-contained (no external assets).
-Feel free to ask for features: tileset, sprite images, levels, sound, mobile support.
 """
 import streamlit as st
 import streamlit.components.v1 as components
@@ -36,8 +32,8 @@ const ctx = canvas.getContext('2d');
 const W = canvas.width, H = canvas.height;
 
 let keys = {};
-window.addEventListener('keydown', e=>{ keys[e.code]=true; e.preventDefault(); });
-window.addEventListener('keyup', e=>{ keys[e.code]=false; e.preventDefault(); });
+window.addEventListener('keydown', e=>{ keys[e.code]=true; });
+window.addEventListener('keyup', e=>{ keys[e.code]=false; });
 
 // Camera / world
 let cameraX = 0;
@@ -49,7 +45,7 @@ let player = {
   color:'#e74c3c'
 };
 
-const gravity = 0.5;
+const gravity = 0.3;
 
 // Level layout (platforms as x,y,w,h)
 let platforms = [
@@ -100,21 +96,17 @@ function update(){
   // collisions with platforms
   player.onGround = false;
   for(let p of platforms){
-    // AABB collision check after movement
     let pp = {x:p.x, y:p.y, w:p.w, h:p.h};
     let pl = {x:player.x, y:player.y, w:player.w, h:player.h};
     if(rectsOverlap(pl,pp)){
-      // determine penetration depths
       let px = (player.x + player.w/2) - (p.x + p.w/2);
       let py = (player.y + player.h/2) - (p.y + p.h/2);
       let overlapX = (player.w/2 + p.w/2) - Math.abs(px);
       let overlapY = (player.h/2 + p.h/2) - Math.abs(py);
       if(overlapX < overlapY){
-        // resolve X
         if(px>0) player.x += overlapX; else player.x -= overlapX;
         player.vx = 0;
       } else {
-        // resolve Y
         if(py>0){ player.y += overlapY; player.vy = 0; }
         else { player.y -= overlapY; player.vy = 0; player.onGround = true; }
       }
@@ -123,7 +115,6 @@ function update(){
 
   // enemy movement
   enemy.x += enemy.dir * enemy.speed;
-  // simple patrol range
   if(enemy.x < 1060) enemy.dir = 1;
   if(enemy.x > 1260) enemy.dir = -1;
 
@@ -144,7 +135,6 @@ function update(){
 
   // enemy collision -> die
   if(rectsOverlap({x:enemy.x,y:enemy.y,w:enemy.w,h:enemy.h}, {x:player.x,y:player.y,w:player.w,h:player.h})){
-    // if player falling onto enemy, bounce & kill enemy
     if(player.vy > 1){ enemy.dead = true; player.vy = -6; }
     else { gameState = 'dead'; }
   }
@@ -154,27 +144,21 @@ function update(){
 }
 
 function draw(){
-  // clear
   ctx.clearRect(0,0,W,H);
 
-  // sky and ground gradient already via CSS background, draw small clouds
-  // draw parallax background hills
   ctx.fillStyle='#8BC34A';
   for(let i=0;i<6;i++){
     let hx = (i*400 - cameraX*0.2)%2000 - 100;
     ctx.beginPath(); ctx.ellipse(hx,430,150,60,0,0,2*Math.PI); ctx.fill();
   }
 
-  // draw platforms
   for(let p of platforms){
     ctx.fillStyle='#654321';
     ctx.fillRect(p.x - cameraX, p.y, p.w, p.h);
-    // top grass
     ctx.fillStyle='#2ecc71';
     ctx.fillRect(p.x - cameraX, p.y-6, Math.min(p.w,50), 6);
   }
 
-  // draw coins
   for(let c of coins){
     if(!c.collected){
       ctx.fillStyle='#f1c40f';
@@ -183,31 +167,24 @@ function draw(){
     }
   }
 
-  // draw enemy
   if(!enemy.dead){
     ctx.fillStyle='#2c3e50';
     ctx.fillRect(enemy.x - cameraX, enemy.y, enemy.w, enemy.h);
   } else {
-    // enemy squashed
     ctx.fillStyle='rgba(44,62,80,0.6)';
     ctx.fillRect(enemy.x - cameraX, enemy.y+10, enemy.w, 6);
   }
 
-  // draw goal flag
   ctx.fillStyle='#333'; ctx.fillRect(goal.x - cameraX, goal.y, 6, goal.h);
   ctx.fillStyle='#e74c3c'; ctx.beginPath(); ctx.moveTo(goal.x+6 - cameraX, goal.y+10); ctx.lineTo(goal.x+36 - cameraX, goal.y+24); ctx.lineTo(goal.x+6 - cameraX, goal.y+36); ctx.closePath(); ctx.fill();
 
-  // draw player
   ctx.fillStyle = player.color;
   ctx.fillRect(player.x - cameraX, player.y, player.w, player.h);
-  // simple eyes
   ctx.fillStyle = '#fff'; ctx.fillRect(player.x - cameraX +6, player.y+8,6,6); ctx.fillStyle='#000'; ctx.fillRect(player.x - cameraX +8, player.y+10,2,2);
 
-  // HUD
   ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(10,10,140,36);
   ctx.fillStyle = '#fff'; ctx.font='16px Arial'; ctx.fillText('金幣: '+score, 18,32);
 
-  // messages
   if(gameState==='won'){
     ctx.fillStyle='rgba(0,0,0,0.6)'; ctx.fillRect(W/2-160,H/2-40,320,80);
     ctx.fillStyle='#fff'; ctx.font='28px Arial'; ctx.fillText('你贏了！恭喜過關 🎉', W/2-130, H/2);
@@ -227,7 +204,6 @@ window.addEventListener('keydown', e=>{
   if(e.code==='KeyR'){ reset(); }
 });
 
-// game loop
 function loop(){ update(); draw(); requestAnimationFrame(loop); }
 loop();
 </script>
@@ -235,7 +211,6 @@ loop();
 </html>
 '''
 
-# Embed in Streamlit
 components.html(html, height=600, scrolling=False)
 
 st.markdown('---')
@@ -249,4 +224,4 @@ with col2:
     st.write('- 真正的像素角色圖、音效、更多關卡')
     st.write('- 敵人 AI、碰撞優化、手機支援')
 
-st.info('如果你想我可以：產生更多關卡 (JSON)、加入真人馬里奧風格像素圖、或改寫成純 Python/Pygame 版本（但 Pygame 不容易嵌入 Streamlit）。告訴我你要的功能，我會直接幫你改好程式碼。')
+st.info('這個版本已移除 preventDefault，鍵盤輸入更容易生效。記得要先點一下遊戲畫面再操作。')
