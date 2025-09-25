@@ -63,7 +63,7 @@ bindTouch('jump','Space');
 
 let cameraX = 0;
 let player = { x:50, y:380, w:28, h:40, vx:0, vy:0, speed:2.4, jumpPower:9, onGround:false, color:'#e74c3c' };
-const gravity = 0.5;
+const gravity = 0.3;
 
 let platforms = [
   {x:0,y:440,w:2000,h:100},
