@@ -1,11 +1,7 @@
 # app.py
 import streamlit as st
 from sympy import Eq, solve, simplify, factor, expand, SympifyError
-from sympy.parsing.sympy_parser import (
-    parse_expr,
-    standard_transformations,
-    implicit_multiplication_application,
-)
+from sympy.parsing.sympy_parser import parse_expr, standard_transformations, implicit_multiplication_application
 from sympy.printing.latex import latex
 
 # -----------------------------
@@ -25,7 +21,6 @@ COMMON_REPLACEMENTS = {
     "−": "-",
 }
 
-
 def clean_input(s: str) -> str:
     """Fix common math typos."""
     if not s:
@@ -37,11 +32,9 @@ def clean_input(s: str) -> str:
     s = s.replace(" = ", "=").replace(" =", "=").replace("= ", "=")
     return s
 
-
 def try_parse_expression(expr_text: str):
     """Return parsed SymPy expression."""
     return parse_expr(expr_text, transformations=TRANSFORMS)
-
 
 def solve_input(text: str):
     corrected = clean_input(text)
@@ -58,7 +51,6 @@ def solve_input(text: str):
 
     try:
         if "=" in corrected:
-            # Equation case
             left_s, right_s = corrected.split("=", 1)
             left = try_parse_expression(left_s)
             right = try_parse_expression(right_s)
@@ -78,9 +70,7 @@ def solve_input(text: str):
                 result["solution"] = sol
                 result["factor"] = factor(eq_expr)
                 result["expand"] = expand(eq_expr)
-
         else:
-            # Expression case
             expr = try_parse_expression(corrected)
             result["parsed"] = expr
             result["simplified"] = simplify(expr)
@@ -100,9 +90,8 @@ def solve_input(text: str):
 
     return result
 
-
 # -----------------------------
-# Streamlit App UI
+# Streamlit UI
 # -----------------------------
 st.set_page_config(page_title="Math Corrector & Solver", layout="centered")
 st.title("🧮 Math Corrector & Solver")
