@@ -8,7 +8,9 @@ from sympy.parsing.sympy_parser import (
 )
 from sympy.printing.latex import latex
 
-# === Helper setup ===
+# -----------------------------
+# Helper setup
+# -----------------------------
 TRANSFORMS = standard_transformations + (implicit_multiplication_application,)
 
 COMMON_REPLACEMENTS = {
@@ -99,7 +101,9 @@ def solve_input(text: str):
     return result
 
 
-# === Streamlit UI ===
+# -----------------------------
+# Streamlit App UI
+# -----------------------------
 st.set_page_config(page_title="Math Corrector & Solver", layout="centered")
 st.title("🧮 Math Corrector & Solver")
 
@@ -107,9 +111,9 @@ st.write(
     """
     Enter any **math expression** or **equation**.
     The app will:
-    1. Auto-correct common math typos  
-    2. Simplify and solve it  
-    3. Display all forms nicely in LaTeX
+    1. ✅ Auto-correct common math typos  
+    2. 🧠 Simplify and solve it  
+    3. ✨ Display results beautifully using LaTeX
     """
 )
 
@@ -154,4 +158,4 @@ sqrt(16) + 3*4
 1,000 + 2,500
 """
 )
-st.caption("Built with Streamlit + SymPy — perfect for algebraic solving and simplification.")
+st.caption("Built with Streamlit + SymPy — handles algebraic solving and simplification.")
