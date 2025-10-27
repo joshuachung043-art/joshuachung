@@ -1,12 +1,12 @@
 import streamlit as st
-from sympy import symbols, simplify, factor, diff, integrate, solve, sympify
+from sympy import symbols, simplify, factor, diff, integrate, solve, sympify, Eq
 from sympy import sin, cos, tan, log, exp, sqrt
 import re
 
-# --- Streamlit app setup ---
+# --- Streamlit setup ---
 st.set_page_config(page_title="Math Solver App", page_icon="🧮")
-st.title("🧮 Textbook-Style Math Solver")
-st.write("Type math expressions naturally, like you see in textbooks!")
+st.title("🧮 Robust Math Solver")
+st.write("Type math expressions naturally, like in textbooks!")
 
 # --- User selects operation ---
 operation = st.selectbox(
@@ -17,25 +17,16 @@ operation = st.selectbox(
 # --- Input expression ---
 expr_input = st.text_input("Enter your math expression:", "")
 
-# --- Variable for calculus or equations ---
+# --- Variable ---
 var_input = st.text_input("Enter the main variable (e.g., x):", "x")
 
-# --- Preprocessing function ---
+# --- Preprocessing ---
 def preprocess_expression(expr):
-    """
-    Convert textbook-style math input to sympy-compatible format:
-    - ^ to **
-    - implicit multiplication (3x -> 3*x, xy -> x*y)
-    """
     # Convert ^ to **
     expr = expr.replace("^", "**")
-
-    # Handle implicit multiplication:
-    # 1. Between number and variable/function: 3x -> 3*x, 2sin(x) -> 2*sin(x)
-    expr = re.sub(r'(\d)([a-zA-Z(])', r'\1*\2', expr)
-    # 2. Between variable and variable/function: xy -> x*y, xsin(x) -> x*sin(x)
-    expr = re.sub(r'([a-zA-Z)])([a-zA-Z(])', r'\1*\2', expr)
-
+    # Insert multiplication only where appropriate
+    expr = re.sub(r'(\d)([a-zA-Z(])', r'\1*\2', expr)      # number before variable/function
+    expr = re.sub(r'([a-zA-Z)])([a-zA-Z(])', r'\1*\2', expr) # variable before variable/function
     return expr
 
 # --- Solve button ---
@@ -44,35 +35,37 @@ if st.button("Solve"):
         st.error("❌ Please enter a valid expression.")
     else:
         try:
-            # Preprocess input
             expr_input_fixed = preprocess_expression(expr_input)
 
-            # Define main symbol
             var = symbols(var_input)
 
-            # Define allowed functions
             allowed_functions = {
                 "sin": sin, "cos": cos, "tan": tan,
                 "log": log, "exp": exp, "sqrt": sqrt,
                 var_input: var
             }
 
-            # Convert to sympy expression
-            expr = sympify(expr_input_fixed, locals=allowed_functions)
-
-            # Perform selected operation
-            if operation == "Simplify":
-                result = simplify(expr)
-            elif operation == "Factor":
-                result = factor(expr)
-            elif operation == "Derivative":
-                result = diff(expr, var)
-            elif operation == "Integral":
-                result = integrate(expr, var)
-            elif operation == "Solve Equation":
+            # Check if the user entered an equation
+            if "=" in expr_input_fixed and operation == "Solve Equation":
+                lhs, rhs = expr_input_fixed.split("=")
+                lhs_expr = sympify(lhs, locals=allowed_functions)
+                rhs_expr = sympify(rhs, locals=allowed_functions)
+                expr = Eq(lhs_expr, rhs_expr)
                 result = solve(expr, var)
             else:
-                result = "Invalid operation"
+                expr = sympify(expr_input_fixed, locals=allowed_functions)
+                if operation == "Simplify":
+                    result = simplify(expr)
+                elif operation == "Factor":
+                    result = factor(expr)
+                elif operation == "Derivative":
+                    result = diff(expr, var)
+                elif operation == "Integral":
+                    result = integrate(expr, var)
+                elif operation == "Solve Equation":
+                    result = solve(expr, var)
+                else:
+                    result = "Invalid operation"
 
             st.success(f"✅ Result: {result}")
 
