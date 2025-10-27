@@ -11,159 +11,133 @@ from sympy import (
 from sympy.parsing.sympy_parser import parse_expr
 
 st.set_page_config(page_title="Math Solver", page_icon="🧮", layout="centered")
-st.title("🧮 Streamlit Math Solver — Robust Parser")
+st.title("🧮 Streamlit Math Solver — Full Version")
+
 st.markdown("""
-This app:
-- handles `sinx`, `sin x`, `sin(x)` (and the same for cos, tan, etc.)
-- processes `d/dx sinx`, `d/dx sin(x)`, `diff(...)`
-- solves equations, simplifies, factors, expands, integrates and evaluates
+Supports:
+- `sinx`, `cos x`, `tan(x)` etc.
+- `d/dx sinx`, `diff(expr)`
+- Solve equations (with multiplicity for polynomials)
+- Simplify, Factor, Expand, Integrate, Evaluate numerically
 """)
 
-operation = st.sidebar.selectbox(
-    "Choose operation",
-    [
-        "Auto (detect operation)",
-        "Solve equation",
-        "Simplify expression",
-        "Differentiate",
-        "Integrate (indefinite)",
-        "Factor",
-        "Expand",
-        "Evaluate (numeric)",
-    ],
-)
-
+# Sidebar
+operation = st.sidebar.selectbox("Choose operation", [
+    "Auto (detect operation)", "Solve equation", "Simplify expression",
+    "Differentiate", "Integrate (indefinite)", "Factor", "Expand", "Evaluate (numeric)"
+])
 var_input = st.sidebar.text_input("Variable(s) (comma-separated)", value="x")
 
-MATH_FUNCS = ['sin', 'cos', 'tan', 'sec', 'csc', 'cot',
-              'asin', 'acos', 'atan', 'sinh', 'cosh', 'tanh',
-              'exp', 'log', 'sqrt']
+MATH_FUNCS = ['sin','cos','tan','sec','csc','cot','asin','acos','atan',
+              'sinh','cosh','tanh','exp','log','sqrt']
 
 BASE_LOCAL = {
-    'sin': sin, 'cos': cos, 'tan': tan, 'sec': sec, 'csc': csc, 'cot': cot,
-    'asin': __import__('sympy').asin, 'acos': __import__('sympy').acos, 'atan': __import__('sympy').atan,
-    'sinh': __import__('sympy').sinh, 'cosh': __import__('sympy').cosh, 'tanh': __import__('sympy').tanh,
-    'exp': exp, 'log': log, 'sqrt': sqrt,
-    'pi': pi, 'E': E
+    'sin':sin,'cos':cos,'tan':tan,'sec':sec,'csc':csc,'cot':cot,
+    'asin':__import__('sympy').asin,'acos':__import__('sympy').acos,'atan':__import__('sympy').atan,
+    'sinh':__import__('sympy').sinh,'cosh':__import__('sympy').cosh,'tanh':__import__('sympy').tanh,
+    'exp':exp,'log':log,'sqrt':sqrt,'pi':pi,'E':E
 }
 
-# ---------- Helper functions ----------
-def normalize_simple_func(s: str) -> str:
-    if not isinstance(s, str): return s
-    text = s
-    text = re.sub(r'\s+', ' ', text).strip()
+# ----------------- Helper functions -----------------
+def normalize_func(s):
     for f in MATH_FUNCS:
-        pattern1 = re.compile(rf'\b{f}\s+([A-Za-z0-9\.\*\+\-/\^\_\(\)]+)', flags=re.IGNORECASE)
-        text = pattern1.sub(lambda m, f=f: f"{f.lower()}({m.group(1)})", text)
-        pattern2 = re.compile(rf'\b{f}([A-Za-z0-9\.\_\^]+)', flags=re.IGNORECASE)
-        text = pattern2.sub(lambda m, f=f: f"{f.lower()}({m.group(1)})", text)
-        pattern3 = re.compile(rf'\b{f}\s*\(\s*', flags=re.IGNORECASE)
-        text = pattern3.sub(f"{f.lower()}(", text)
-    return text
+        # sinx -> sin(x), sin x -> sin(x)
+        s = re.sub(rf'\b{f}\s*([A-Za-z0-9\*\+\-/\^\(\)]+)', f'{f}(\\1)', s)
+        s = re.sub(rf'\b{f}([A-Za-z0-9\*\+\-/\^\(\)]+)', f'{f}(\\1)', s)
+    return s
 
-def safe_preprocess(s: str) -> str:
-    if not isinstance(s, str): return s
-    t = s.replace('^', '**')
-    t = normalize_simple_func(t)
-    t = re.sub(r'(?P<num>\d)(?P<var>[A-Za-z])', r'\g<num>*\g<var>', t)
-    t = t.replace(')(', ')*(')
-    def name_before_paren(m):
-        name = m.group(1)
-        if name.lower() in MATH_FUNCS:
-            return f"{name.lower()}("
-        return f"{name}*("
-    t = re.sub(r'([A-Za-z0-9_]+)\(', name_before_paren, t)
-    return t.strip()
+def preprocess(s):
+    s = s.replace('^','**')
+    s = normalize_func(s)
+    s = re.sub(r'(\d)([A-Za-z])', r'\1*\2', s)
+    s = s.replace(')(', ')*(')
+    return s.strip()
 
-def find_single_letter_vars(s: str):
-    if not isinstance(s, str): return []
-    tmp = s
-    for f in MATH_FUNCS: tmp = re.sub(rf'\b{re.escape(f)}\b', ' ', tmp, flags=re.IGNORECASE)
-    letters = set(re.findall(r'(?<![A-Za-z0-9_])([A-Za-z])(?![A-Za-z0-9_])', tmp))
-    return sorted(letters, key=lambda c: (0 if c in ('x','y','t') else 1, c))
-
-def build_local_dict(preprocessed_str: str):
+def build_local(s):
     local = dict(BASE_LOCAL)
-    letters = find_single_letter_vars(preprocessed_str)
-    for ch in letters:
-        if ch.lower() in BASE_LOCAL: continue
-        local[ch] = Symbol(ch)
+    letters = set(re.findall(r'[a-zA-Z]', s))
+    for l in letters:
+        if l not in local: local[l] = Symbol(l)
     return local
 
-def parse_expr_with_local(s: str):
-    pre = safe_preprocess(s)
-    local = build_local_dict(pre)
-    return parse_expr(pre, local_dict=local)
-
-def get_symbols_from_input(var_input_str):
-    names = [v.strip() for v in var_input_str.split(",") if v.strip()]
-    if not names: return (symbols("x"),)
-    syms = symbols(" ".join(names))
-    return tuple(syms) if isinstance(syms, (tuple, list)) else (syms,)
-
 def parse_input(expr_str):
-    s = str(expr_str).strip()
-    m = re.match(r'^\s*d/d([A-Za-z])\s*(.*)$', s)
+    s = expr_str.strip()
+    # d/dx syntax
+    m = re.match(r'd/d([A-Za-z])\s*(.*)', s)
     if m:
-        var = symbols(m.group(1))
-        rest = m.group(2).strip()
-        if rest == '': raise ValueError("No expression to differentiate after d/d<var>")
-        return diff(parse_expr_with_local(rest), var)
-    m2 = re.match(r'^\s*diff\s*\(\s*(.*)\s*\)\s*$', s)
+        return diff(parse_expr(preprocess(m.group(2)), local_dict=build_local(m.group(2))), symbols(m.group(1)))
+    # diff(expr) syntax
+    m2 = re.match(r'diff\s*\(\s*(.*)\s*\)', s)
     if m2:
-        inner_expr = parse_expr_with_local(m2.group(1))
-        syms = inner_expr.free_symbols
-        var = list(syms)[0] if syms else symbols("x")
-        return diff(inner_expr, var)
+        expr = parse_expr(preprocess(m2.group(1)), local_dict=build_local(m2.group(1)))
+        var = list(expr.free_symbols)[0] if expr.free_symbols else symbols("x")
+        return diff(expr, var)
+    # equation
     if '=' in s:
-        left, right = s.split('=', 1)
-        return Eq(parse_expr_with_local(left), parse_expr_with_local(right))
-    return parse_expr_with_local(s)
+        left,right = s.split('=',1)
+        return Eq(parse_expr(preprocess(left), local_dict=build_local(left)),
+                  parse_expr(preprocess(right), local_dict=build_local(right)))
+    # expression
+    return parse_expr(preprocess(s), local_dict=build_local(s))
 
-# ---------- UI ----------
-expr_input = st.text_area("Enter expression or equation", height=140,
-                          value="d/dx sinx  # try: d/dx sinx, d/dx cosx, d/dx sin(x)")
+# ----------------- UI -----------------
+expr_input = st.text_area("Enter expression or equation", height=140, value="d/dx sinx")
 if st.button("Run"):
     if not expr_input.strip():
-        st.warning("Please enter an expression first.")
+        st.warning("Enter an expression first.")
     else:
         try:
-            user_syms = get_symbols_from_input(var_input)
+            syms = [Symbol(v.strip()) for v in var_input.split(",") if v.strip()]
+            if not syms: syms = [symbols("x")]
             parsed = parse_input(expr_input)
+
+            # Auto-detect
             op = operation
-            if operation == "Auto (detect operation)":
+            if operation=="Auto (detect operation)":
                 s_low = expr_input.lower()
-                if re.match(r'^\s*d/d', s_low) or 'diff(' in s_low: op = "Differentiate"
-                elif '∫' in s_low or 'integrate' in s_low: op = "Integrate (indefinite)"
-                elif '=' in s_low: op = "Solve equation"
-                else: op = "Simplify expression"
+                if s_low.startswith("d/d") or 'diff(' in s_low: op="Differentiate"
+                elif '=' in s_low: op="Solve equation"
+                elif 'integrate' in s_low or '∫' in s_low: op="Integrate (indefinite)"
+                else: op="Simplify expression"
 
             expr_val = parsed.lhs - parsed.rhs if isinstance(parsed, Eq) else parsed
 
-            if op == "Solve equation":
-                target = user_syms[0] if user_syms else symbols("x")
-                sol_set = solveset(expr_val, target, domain=S.Complexes)
-                st.subheader("Solution set"); st.write(sol_set); st.latex(latex(sol_set))
+            if op=="Solve equation":
+                sol = solveset(expr_val, syms[0], domain=S.Complexes)
+                st.subheader("Solution set")
+                st.write(sol)
+                st.latex(latex(sol))
+                # Polynomial multiplicities
                 try:
-                    poly = Poly(expr_val, target)
-                    if poly.is_polynomial(): rd = roots(expr_val, target); st.subheader("Polynomial roots (with multiplicity)"); st.write([(r,int(m)) for r,m in rd.items()])
-                except: pass
+                    poly = Poly(expr_val, syms[0])
+                    if poly.is_polynomial():
+                        rd = roots(expr_val, syms[0])
+                        if rd:
+                            st.subheader("Polynomial roots (with multiplicity)")
+                            st.write([(r,int(m)) for r,m in rd.items()])
+                except:
+                    pass
 
-            elif op == "Simplify expression": res = simplify(expr_val); st.subheader("Simplified"); st.write(res); st.latex(latex(res))
-            elif op == "Differentiate": res = diff(expr_val, user_syms[0]); st.subheader("Derivative"); st.write(res); st.latex(latex(res))
-            elif op == "Integrate (indefinite)": res = integrate(expr_val, user_syms[0]); st.subheader("Indefinite integral"); st.write(res); st.latex(latex(res))
-            elif op == "Factor": res = factor(expr_val); st.subheader("Factored"); st.write(res); st.latex(latex(res))
-            elif op == "Expand": res = expand(expr_val); st.subheader("Expanded"); st.write(res); st.latex(latex(res))
-            elif op == "Evaluate (numeric)":
-                vals = st.text_input("Assignments", value=""); 
+            elif op=="Simplify expression":
+                res = simplify(expr_val); st.subheader("Simplified"); st.write(res); st.latex(latex(res))
+            elif op=="Differentiate":
+                res = diff(expr_val, syms[0]); st.subheader("Derivative"); st.write(res); st.latex(latex(res))
+            elif op=="Integrate (indefinite)":
+                res = integrate(expr_val, syms[0]); st.subheader("Indefinite integral"); st.write(res); st.latex(latex(res))
+            elif op=="Factor":
+                res = factor(expr_val); st.subheader("Factored"); st.write(res); st.latex(latex(res))
+            elif op=="Expand":
+                res = expand(expr_val); st.subheader("Expanded"); st.write(res); st.latex(latex(res))
+            elif op=="Evaluate (numeric)":
+                vals = st.text_input("Assignments e.g. x=2,y=3","")
                 if vals.strip():
-                    subs = {Symbol(k.strip()): sympify(v.strip()) for pair in vals.split(",") if "=" in pair for k,v in [pair.split("=")]}
+                    subs = {Symbol(k.strip()):sympify(v.strip()) for pair in vals.split(",") if "=" in pair for k,v in [pair.split("=")]}
                     res = expr_val.evalf(subs=subs); st.subheader("Numeric result"); st.write(res)
-                else: st.info("Provide variable assignments to evaluate.")
+                else: st.info("Provide variable assignments.")
 
-        except Exception:
-            st.error("An error occurred while processing your input.")
+        except Exception as e:
+            st.error("Error while processing input.")
             st.text(traceback.format_exc())
 
 st.sidebar.markdown("---")
-st.sidebar.info("Examples:\n- d/dx sinx  -> cos(x)\n- d/dx cosx  -> -sin(x)\n- d/dx sin(x) -> cos(x)\n- diff(x^3)   -> 3*x**2")
+st.sidebar.info("Examples:\n- d/dx sinx -> cos(x)\n- diff(x^3) -> 3*x**2\n- Solve equation: x^2=4\n- Factor: x^2-4")
