@@ -41,7 +41,6 @@ BASE_LOCAL = {
 # ----------------- Helper functions -----------------
 def normalize_func(s):
     for f in MATH_FUNCS:
-        # sinx -> sin(x), sin x -> sin(x)
         s = re.sub(rf'\b{f}\s*([A-Za-z0-9\*\+\-/\^\(\)]+)', f'{f}(\\1)', s)
         s = re.sub(rf'\b{f}([A-Za-z0-9\*\+\-/\^\(\)]+)', f'{f}(\\1)', s)
     return s
@@ -135,7 +134,7 @@ if st.button("Run"):
                     res = expr_val.evalf(subs=subs); st.subheader("Numeric result"); st.write(res)
                 else: st.info("Provide variable assignments.")
 
-        except Exception as e:
+        except Exception:
             st.error("Error while processing input.")
             st.text(traceback.format_exc())
 
