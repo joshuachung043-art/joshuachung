@@ -3,10 +3,10 @@ from sympy import symbols, simplify, factor, diff, integrate, solve, sympify
 from sympy import sin, cos, tan, log, exp, sqrt
 import re
 
-# --- App title ---
+# --- Streamlit app setup ---
 st.set_page_config(page_title="Math Solver App", page_icon="🧮")
-st.title("🧮 Math Solver App")
-st.write("Solve, simplify, factor, derive, or integrate math expressions easily.")
+st.title("🧮 Textbook-Style Math Solver")
+st.write("Type math expressions naturally, like you see in textbooks!")
 
 # --- User selects operation ---
 operation = st.selectbox(
@@ -15,48 +15,52 @@ operation = st.selectbox(
 )
 
 # --- Input expression ---
-expr_input = st.text_input("Enter your math expression (e.g., 3x^2 + 2x or sin(x)):", "")
+expr_input = st.text_input("Enter your math expression:", "")
 
 # --- Variable for calculus or equations ---
-var_input = st.text_input("Enter the variable (e.g., x):", "x")
+var_input = st.text_input("Enter the main variable (e.g., x):", "x")
 
-# --- Preprocess function ---
+# --- Preprocessing function ---
 def preprocess_expression(expr):
-    # Convert ^ to ** for Python
-    expr = expr.replace('^', '**')
+    """
+    Convert textbook-style math input to sympy-compatible format:
+    - ^ to **
+    - implicit multiplication (3x -> 3*x, xy -> x*y)
+    """
+    # Convert ^ to **
+    expr = expr.replace("^", "**")
 
-    # Insert * only between a number and variable (e.g., 3x -> 3*x)
-    expr = re.sub(r'(\d)([a-zA-Z\(])', r'\1*\2', expr)
+    # Handle implicit multiplication:
+    # 1. Between number and variable/function: 3x -> 3*x, 2sin(x) -> 2*sin(x)
+    expr = re.sub(r'(\d)([a-zA-Z(])', r'\1*\2', expr)
+    # 2. Between variable and variable/function: xy -> x*y, xsin(x) -> x*sin(x)
+    expr = re.sub(r'([a-zA-Z)])([a-zA-Z(])', r'\1*\2', expr)
 
     return expr
 
-# --- Solve Button ---
+# --- Solve button ---
 if st.button("Solve"):
-    if expr_input.strip() == "":
+    if not expr_input.strip():
         st.error("❌ Please enter a valid expression.")
     else:
         try:
             # Preprocess input
             expr_input_fixed = preprocess_expression(expr_input)
 
-            # Create symbol
+            # Define main symbol
             var = symbols(var_input)
 
-            # Define allowed functions for sympify
+            # Define allowed functions
             allowed_functions = {
-                "sin": sin,
-                "cos": cos,
-                "tan": tan,
-                "log": log,
-                "exp": exp,
-                "sqrt": sqrt,
+                "sin": sin, "cos": cos, "tan": tan,
+                "log": log, "exp": exp, "sqrt": sqrt,
                 var_input: var
             }
 
-            # Convert string to sympy expression safely
+            # Convert to sympy expression
             expr = sympify(expr_input_fixed, locals=allowed_functions)
 
-            # Perform operation
+            # Perform selected operation
             if operation == "Simplify":
                 result = simplify(expr)
             elif operation == "Factor":
