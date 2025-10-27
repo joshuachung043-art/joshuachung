@@ -1,32 +1,35 @@
 import streamlit as st
-from sympy import symbols, simplify, factor, diff, integrate, solve, sympify, Eq
-from sympy import sin, cos, tan, log, exp, sqrt
+from sympy import symbols, simplify, factor, diff, integrate, solve, sin, cos, tan, log, exp, sqrt
+from sympy.parsing.sympy_parser import parse_expr
 import re
 
 # --- Streamlit setup ---
-st.set_page_config(page_title="Math Solver App", page_icon="🧮")
-st.title("🧮 Robust Math Solver")
-st.write("Type math expressions naturally, like in textbooks!")
+st.set_page_config(page_title="Polished Math Solver", page_icon="🧮")
+st.title("🧮 Polished Textbook-Style Math Solver")
+st.write("Type math expressions naturally and see results beautifully rendered in LaTeX!")
 
-# --- User selects operation ---
+# --- Initialize history ---
+if "history" not in st.session_state:
+    st.session_state.history = []
+
+# --- Operation selection ---
 operation = st.selectbox(
-    "Choose the type of math operation:",
+    "Choose operation:",
     ("Simplify", "Factor", "Solve Equation", "Derivative", "Integral")
 )
 
-# --- Input expression ---
-expr_input = st.text_input("Enter your math expression:", "")
+# --- Expression input ---
+expr_input = st.text_input("Enter your math expression (e.g., 3x^2 + sin(x)):", "")
+var_input = st.text_input("Enter main variable (e.g., x):", "x")
 
-# --- Variable ---
-var_input = st.text_input("Enter the main variable (e.g., x):", "x")
-
-# --- Preprocessing ---
+# --- Preprocessing function ---
 def preprocess_expression(expr):
     # Convert ^ to **
     expr = expr.replace("^", "**")
-    # Insert multiplication only where appropriate
-    expr = re.sub(r'(\d)([a-zA-Z(])', r'\1*\2', expr)      # number before variable/function
-    expr = re.sub(r'([a-zA-Z)])([a-zA-Z(])', r'\1*\2', expr) # variable before variable/function
+    # Implicit multiplication: number before variable/function
+    expr = re.sub(r'(\d)([a-zA-Z(])', r'\1*\2', expr)
+    # Variable before variable/function
+    expr = re.sub(r'([a-zA-Z)])([a-zA-Z(])', r'\1*\2', expr)
     return expr
 
 # --- Solve button ---
@@ -35,25 +38,23 @@ if st.button("Solve"):
         st.error("❌ Please enter a valid expression.")
     else:
         try:
-            expr_input_fixed = preprocess_expression(expr_input)
-
+            expr_fixed = preprocess_expression(expr_input)
             var = symbols(var_input)
-
             allowed_functions = {
                 "sin": sin, "cos": cos, "tan": tan,
                 "log": log, "exp": exp, "sqrt": sqrt,
                 var_input: var
             }
 
-            # Check if the user entered an equation
-            if "=" in expr_input_fixed and operation == "Solve Equation":
-                lhs, rhs = expr_input_fixed.split("=")
-                lhs_expr = sympify(lhs, locals=allowed_functions)
-                rhs_expr = sympify(rhs, locals=allowed_functions)
-                expr = Eq(lhs_expr, rhs_expr)
+            # Handle equations with '='
+            if "=" in expr_fixed and operation == "Solve Equation":
+                lhs, rhs = expr_fixed.split("=")
+                lhs_expr = parse_expr(lhs, local_dict=allowed_functions)
+                rhs_expr = parse_expr(rhs, local_dict=allowed_functions)
+                expr = lhs_expr - rhs_expr  # solve expects zero
                 result = solve(expr, var)
             else:
-                expr = sympify(expr_input_fixed, locals=allowed_functions)
+                expr = parse_expr(expr_fixed, local_dict=allowed_functions)
                 if operation == "Simplify":
                     result = simplify(expr)
                 elif operation == "Factor":
@@ -67,7 +68,20 @@ if st.button("Solve"):
                 else:
                     result = "Invalid operation"
 
-            st.success(f"✅ Result: {result}")
+            # Add to history
+            st.session_state.history.append((expr_input, operation, result))
+
+            # Display results in LaTeX
+            st.write("**Input:**")
+            st.latex(expr_input.replace("^", "**"))
+            st.write("**Result:**")
+            st.latex(result)
 
         except Exception as e:
             st.error(f"❌ Error: {e}")
+
+# --- Display calculation history ---
+if st.session_state.history:
+    st.write("### 🕘 Calculation History")
+    for i, (expr_text, op, res) in enumerate(reversed(st.session_state.history[-10:]), 1):
+        st.write(f"{i}. **{op}**: {expr_text} → {res}")
