@@ -1,5 +1,5 @@
 import streamlit as st
-from sympy import symbols, simplify, factor, diff, integrate, solve, sin, cos, tan, log, exp, sqrt
+from sympy import symbols, simplify, factor, diff, integrate, solve, sin, cos, tan, log, exp, sqrt, latex
 from sympy.parsing.sympy_parser import parse_expr
 import re
 
@@ -51,7 +51,7 @@ if st.button("Solve"):
                 lhs, rhs = expr_fixed.split("=")
                 lhs_expr = parse_expr(lhs, local_dict=allowed_functions)
                 rhs_expr = parse_expr(rhs, local_dict=allowed_functions)
-                expr = lhs_expr - rhs_expr  # solve expects zero
+                expr = lhs_expr - rhs_expr
                 result = solve(expr, var)
             else:
                 expr = parse_expr(expr_fixed, local_dict=allowed_functions)
@@ -69,13 +69,15 @@ if st.button("Solve"):
                     result = "Invalid operation"
 
             # Add to history
-            st.session_state.history.append((expr_input, operation, result))
+            st.session_state.history.append((expr, operation, result))
 
             # Display results in LaTeX
             st.write("**Input:**")
-            st.latex(expr_input.replace("^", "**"))
+            st.latex(latex(expr))  # Convert SymPy expression to LaTeX string
+            
             st.write("**Result:**")
-            st.latex(result)
+            # st.write() automatically handles SymPy expressions
+            st.write(result)
 
         except Exception as e:
             st.error(f"❌ Error: {e}")
@@ -83,5 +85,9 @@ if st.button("Solve"):
 # --- Display calculation history ---
 if st.session_state.history:
     st.write("### 🕘 Calculation History")
-    for i, (expr_text, op, res) in enumerate(reversed(st.session_state.history[-10:]), 1):
-        st.write(f"{i}. **{op}**: {expr_text} → {res}")
+    for i, (expr_obj, op, res) in enumerate(reversed(st.session_state.history[-10:]), 1):
+        with st.expander(f"{i}. **{op}**: {latex(expr_obj)}"):
+            st.write("**Expression:**")
+            st.write(expr_obj)
+            st.write("**Result:**")
+            st.write(res)
