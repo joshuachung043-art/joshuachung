@@ -10,6 +10,7 @@ from sympy import (
 )
 from sympy.parsing.sympy_parser import parse_expr
 
+# ----------------- Streamlit setup -----------------
 st.set_page_config(page_title="Math Solver", page_icon="🧮", layout="centered")
 st.title("🧮 Streamlit Math Solver — Full Version")
 
@@ -17,17 +18,18 @@ st.markdown("""
 Supports:
 - `sinx`, `cos x`, `tan(x)` etc.
 - `d/dx sinx`, `diff(expr)`
-- Solve equations (with multiplicity for polynomials)
+- Solve equations (with polynomial multiplicity)
 - Simplify, Factor, Expand, Integrate, Evaluate numerically
 """)
 
-# Sidebar
+# ----------------- Sidebar -----------------
 operation = st.sidebar.selectbox("Choose operation", [
     "Auto (detect operation)", "Solve equation", "Simplify expression",
     "Differentiate", "Integrate (indefinite)", "Factor", "Expand", "Evaluate (numeric)"
 ])
 var_input = st.sidebar.text_input("Variable(s) (comma-separated)", value="x")
 
+# Known functions
 MATH_FUNCS = ['sin','cos','tan','sec','csc','cot','asin','acos','atan',
               'sinh','cosh','tanh','exp','log','sqrt']
 
@@ -41,6 +43,7 @@ BASE_LOCAL = {
 # ----------------- Helper functions -----------------
 def normalize_func(s):
     for f in MATH_FUNCS:
+        # sinx -> sin(x), sin x -> sin(x)
         s = re.sub(rf'\b{f}\s*([A-Za-z0-9\*\+\-/\^\(\)]+)', f'{f}(\\1)', s)
         s = re.sub(rf'\b{f}([A-Za-z0-9\*\+\-/\^\(\)]+)', f'{f}(\\1)', s)
     return s
@@ -79,7 +82,7 @@ def parse_input(expr_str):
     # expression
     return parse_expr(preprocess(s), local_dict=build_local(s))
 
-# ----------------- UI -----------------
+# ----------------- Main UI -----------------
 expr_input = st.text_area("Enter expression or equation", height=140, value="d/dx sinx")
 if st.button("Run"):
     if not expr_input.strip():
