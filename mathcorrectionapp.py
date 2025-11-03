@@ -64,7 +64,7 @@ with st.sidebar:
 col1, col2 = st.columns([1, 1])
 with col1:
     input_expr = st.text_area("Enter your expression or equation", height=180)
-    st.caption("Examples: `x**2 + 2*x + 1`, `sin(x)/x`, `x^3 - 3*x + 2 = 0`")
+    st.caption("Examples:power=** `x**2 + 2*x + 1`, `sin(x)/x`, `x**3 - 3*x + 2 = 0`")
     run = st.button("Run")
 
 if run:
