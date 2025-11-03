@@ -76,7 +76,6 @@ if st.button("Solve"):
             st.latex(latex(expr))  # Convert SymPy expression to LaTeX string
             
             st.write("**Result:**")
-            # st.write() automatically handles SymPy expressions
             st.write(result)
 
         except Exception as e:
