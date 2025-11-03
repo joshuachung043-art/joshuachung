@@ -58,7 +58,7 @@ with st.sidebar:
         value="",
     )
     st.markdown("---")
-    st.markdown("💡 Use `sin(x)`, `cos(x)`, `exp(x)`, `log(x)`, `sqrt(x)`, and `^` for powers (e.g., `x^2`).")
+    st.markdown("💡 Use `sin(x)`, `cos(x)`, `exp(x)`, `log(x)`, `sqrt(x)`, and `**` for powers (e.g., `x**2`).")
 
 # Main layout
 col1, col2 = st.columns([1, 1])
